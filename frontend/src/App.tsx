@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 function App() {
-  // State
   const [films, setFilms] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -11,8 +10,8 @@ function App() {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [isLoadingRecs, setIsLoadingRecs] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [excludeFilms, setExcludeFilms] = useState<string[]>([]);
 
-  // Search TMDB as user types - returns multiple results
   const searchFilms = async (query: string) => {
     if (query.length < 2) {
       setSearchResults([]);
@@ -44,7 +43,6 @@ function App() {
     }
   };
 
-  // Select film from dropdown
   const handleSelectFilm = (film: any) => {
     const filmTitle = `${film.title} (${film.year})`;
     setFilms([...films, filmTitle]);
@@ -53,12 +51,30 @@ function App() {
     setShowDropdown(false);
   };
 
-  // Remove film tag
   const handleRemoveFilm = (index: number) => {
     setFilms(films.filter((_, i) => i !== index));
   };
 
-  // Get recommendations from backend
+  const handleMarkAsWatched = (filmTitle: string) => {
+    setExcludeFilms([...excludeFilms, filmTitle]);
+    setRecommendations(
+      recommendations.filter((rec) => rec.title !== filmTitle)
+    );
+  };
+
+  const extractYear = (
+    title: string
+  ): { cleanTitle: string; year: string | null } => {
+    const yearMatch = title.match(/\((\d{4})\)$/);
+    if (yearMatch) {
+      return {
+        cleanTitle: title.replace(/\s*\(\d{4}\)$/, "").trim(),
+        year: yearMatch[1],
+      };
+    }
+    return { cleanTitle: title, year: null };
+  };
+
   const handleGetRecommendations = async () => {
     if (films.length === 0) {
       setError("Please add at least one film");
@@ -70,8 +86,7 @@ function App() {
     setRecommendations([]);
 
     try {
-      // First, search for all films to get their metadata
-      const filmTitles = films.map((f) => f.split(" (")[0]); // Remove year from string
+      const filmTitles = films.map((f) => f.split(" (")[0]);
 
       const searchResponse = await fetch(
         "http://localhost:3000/api/films/search-multiple",
@@ -90,7 +105,6 @@ function App() {
         throw new Error("Failed to search for films");
       }
 
-      // Then get recommendations
       const recsResponse = await fetch(
         "http://localhost:3000/api/recommendations",
         {
@@ -101,7 +115,7 @@ function App() {
           body: JSON.stringify({
             films: searchData.films,
             context: context || "Films similar to my favorites",
-            excludeFilms: [],
+            excludeFilms: excludeFilms,
           }),
         }
       );
@@ -112,7 +126,74 @@ function App() {
         throw new Error("Failed to get recommendations");
       }
 
-      setRecommendations(recsData.recommendations);
+      const recsWithPosters = await Promise.all(
+        recsData.recommendations.map(async (rec: any) => {
+          try {
+            const { cleanTitle, year } = extractYear(rec.title);
+
+            let searchQuery = year ? `${cleanTitle} ${year}` : cleanTitle;
+
+            let posterResponse = await fetch(
+              `http://localhost:3000/api/films/search-query?query=${encodeURIComponent(
+                searchQuery
+              )}`
+            );
+            let posterData = await posterResponse.json();
+
+            if (
+              (!posterData.success ||
+                !posterData.films ||
+                posterData.films.length === 0) &&
+              year
+            ) {
+              posterResponse = await fetch(
+                `http://localhost:3000/api/films/search-query?query=${encodeURIComponent(
+                  cleanTitle
+                )}`
+              );
+              posterData = await posterResponse.json();
+            }
+
+            const bestMatch =
+              posterData.success &&
+              posterData.films &&
+              posterData.films.length > 0
+                ? posterData.films[0]
+                : null;
+
+            if (bestMatch) {
+              return {
+                ...rec,
+                title: cleanTitle,
+                poster_path: bestMatch.poster_path || null,
+                year: bestMatch.year || year || "N/A",
+                vote_average: bestMatch.vote_average || 0,
+                tmdb_id: bestMatch.id || null,
+              };
+            } else {
+              return {
+                ...rec,
+                title: cleanTitle,
+                poster_path: null,
+                year: year || "N/A",
+                vote_average: 0,
+                tmdb_id: null,
+              };
+            }
+          } catch (err) {
+            console.error("Error fetching poster for:", rec.title, err);
+            return {
+              ...rec,
+              poster_path: null,
+              year: "N/A",
+              vote_average: 0,
+              tmdb_id: null,
+            };
+          }
+        })
+      );
+
+      setRecommendations(recsWithPosters);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to get recommendations"
@@ -125,7 +206,6 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <header className="text-center mb-12">
           <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
             🎬 Film Sommelier
@@ -135,11 +215,9 @@ function App() {
           </p>
         </header>
 
-        {/* Input Section */}
         <div className="bg-gray-800 rounded-lg p-6 mb-8 shadow-xl">
           <h2 className="text-2xl font-semibold mb-4">Films you like</h2>
 
-          {/* Search Input with Dropdown */}
           <div className="relative mb-4">
             <input
               type="text"
@@ -155,7 +233,6 @@ function App() {
               className="w-full px-4 py-3 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 outline-none transition"
             />
 
-            {/* Dropdown with Posters */}
             {showDropdown && (
               <div className="absolute z-10 w-full mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-lg max-h-96 overflow-y-auto">
                 {isSearching && (
@@ -179,7 +256,6 @@ function App() {
                       onClick={() => handleSelectFilm(film)}
                       className="flex items-center gap-3 p-3 hover:bg-gray-600 cursor-pointer border-b border-gray-600 last:border-b-0 transition"
                     >
-                      {/* Poster Image */}
                       <div className="flex-shrink-0 w-12 h-18 bg-gray-600 rounded overflow-hidden">
                         {film.poster_path ? (
                           <img
@@ -194,7 +270,6 @@ function App() {
                         )}
                       </div>
 
-                      {/* Film Info */}
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold truncate">
                           {film.title}
@@ -209,7 +284,6 @@ function App() {
             )}
           </div>
 
-          {/* Film Tags */}
           <div className="flex flex-wrap gap-2 mb-6">
             {films.map((film, index) => (
               <span
@@ -227,7 +301,6 @@ function App() {
             ))}
           </div>
 
-          {/* Context Input */}
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2 text-gray-300">
               What did you like about these films? (optional)
@@ -241,14 +314,12 @@ function App() {
             />
           </div>
 
-          {/* Error Display */}
           {error && (
             <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-300">
               {error}
             </div>
           )}
 
-          {/* Get Recommendations Button */}
           <button
             onClick={handleGetRecommendations}
             disabled={isLoadingRecs || films.length === 0}
@@ -260,7 +331,32 @@ function App() {
           </button>
         </div>
 
-        {/* Loading State */}
+        {excludeFilms.length > 0 && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-8 shadow-xl">
+            <h2 className="text-2xl font-semibold mb-4">Already Watched</h2>
+            <div className="flex flex-wrap gap-2">
+              {excludeFilms.map((film, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center gap-2 bg-gray-700 px-3 py-1 rounded-full text-sm text-gray-400"
+                >
+                  {film}
+                  <button
+                    onClick={() =>
+                      setExcludeFilms(
+                        excludeFilms.filter((_, i) => i !== index)
+                      )
+                    }
+                    className="hover:text-red-300 font-bold text-lg leading-none"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {isLoadingRecs && (
           <div className="text-center text-gray-300 mb-8">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
@@ -268,7 +364,6 @@ function App() {
           </div>
         )}
 
-        {/* Recommendations Display */}
         <div className="space-y-4">
           {recommendations.map((rec, index) => (
             <div
@@ -276,14 +371,66 @@ function App() {
               className="bg-gray-800 rounded-lg shadow-lg p-6 transform transition hover:scale-105 hover:shadow-2xl"
             >
               <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center text-2xl font-bold">
-                  {index + 1}
+                <div className="flex-shrink-0 w-24 h-36 bg-gray-700 rounded overflow-hidden">
+                  {rec.poster_path ? (
+                    <img
+                      src={`https://image.tmdb.org/t/p/w185${rec.poster_path}`}
+                      alt={rec.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs text-center p-2">
+                      No poster available
+                    </div>
+                  )}
                 </div>
+
                 <div className="flex-1">
-                  <h3 className="text-xl font-semibold mb-2 text-white">
-                    {rec.title}
-                  </h3>
-                  <p className="text-gray-300 leading-relaxed">{rec.reason}</p>
+                  <div className="flex items-start justify-between gap-4 mb-2">
+                    <div className="flex-1">
+                      <h3 className="text-xl font-semibold text-white">
+                        {rec.title}
+                      </h3>
+                      <div className="flex items-center gap-3 mt-1">
+                        {rec.year && rec.vote_average > 0 && (
+                          <div className="text-sm text-gray-400">
+                            {rec.year} • ⭐ {rec.vote_average.toFixed(1)}
+                          </div>
+                        )}
+                        {rec.tmdb_id && (
+                          <div className="flex gap-2">
+                            <a
+                              href={`https://www.themoviedb.org/movie/${rec.tmdb_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded transition"
+                            >
+                              TMDB
+                            </a>
+                            <a
+                              href={`https://www.imdb.com/find?q=${encodeURIComponent(
+                                rec.title
+                              )}&s=tt&exact=true`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded transition"
+                            >
+                              IMDB
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleMarkAsWatched(rec.title)}
+                      className="flex-shrink-0 px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition"
+                    >
+                      ✓ Watched
+                    </button>
+                  </div>
+                  <p className="text-gray-300 leading-relaxed mt-3">
+                    {rec.reason}
+                  </p>
                 </div>
               </div>
             </div>
