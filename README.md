@@ -1,98 +1,110 @@
 # Film Sommelier
 
-A film recommendation system powered by TMDB and Claude AI.
+A web app that recommends films based on multiple movies you've enjoyed. I built this because I was frustrated with generic AI recommendations - I wanted something that could find the connection between several films I liked, not just suggest "movies like X."
 
-## Project Structure
+Particularly useful for discovering niche content (like gritty Indian crime dramas).
+
+## What it does
+
+- Search for films you've enjoyed (autocomplete with posters from TMDB)
+- Add multiple films as tags
+- Optionally describe what you liked about them
+- Get 5 AI-powered recommendations from Claude with explanations
+- Mark films as "already watched" to exclude them from future suggestions
+- View posters, ratings, and links to TMDB/IMDB for each recommendation
+
+## Tech stack
+
+**Frontend:** React, TypeScript, Tailwind CSS, Vite  
+**Backend:** Node.js, Express  
+**APIs:** TMDB (film data), Anthropic Claude (recommendations)
+
+## Running it locally
+
+You'll need API keys from [TMDB](https://www.themoviedb.org/settings/api) and [Anthropic](https://console.anthropic.com/).
+
+### Backend
+
+```bash
+cd backend
+npm install
+cp .env.example .env
+# Add your API keys to .env
+node server.js
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`
+
+## How it works
+
+The app makes two API calls when you request recommendations:
+
+1. **TMDB search** - Gets full metadata (plot, ratings, genres) for your selected films
+2. **Claude AI** - Analyzes the films and returns 5 recommendations with reasoning
+
+I use TMDB's rich metadata instead of just film titles because it gives Claude much better context for understanding what you actually liked.
+
+The exclude list works by sending your "already watched" films to Claude, which avoids recommending them.
+
+## Project structure
 
 ```
 film-sommelier/
-├── backend/           # Backend API and services
-│   ├── server.js      # Express API server
-│   ├── tmdbService.js # TMDB API integration
-│   ├── claudeService.js # Claude AI integration
-│   ├── testTMDB.js    # TMDB service tests
-│   ├── testClaude.js  # Claude service tests
-│   ├── testAPI.js     # API endpoint tests
-│   ├── .env           # Environment variables (not in git)
-│   └── package.json   # Backend dependencies
-│
-└── frontend/          # React + TypeScript frontend
-    ├── src/
-    │   ├── components/   # React components
-    │   ├── services/     # API integration
-    │   └── types/        # TypeScript interfaces
-    └── package.json      # Frontend dependencies
+├── backend/
+│   ├── server.js              # Express API
+│   ├── tmdbService.js         # TMDB integration
+│   └── claudeService.js       # Claude integration
+└── frontend/
+    └── src/
+        └── App.tsx            # Main React component
 ```
 
-## Backend Setup
+## Why I built it this way
 
-1. Navigate to the backend folder:
-   ```bash
-   cd backend
-   ```
+**Multiple films instead of one**: Helps find patterns across films you like, not just "similar to X"
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+**Separate backend**: Keeps API keys secure, makes it easier to add a database later
 
-3. Create a `.env` file with your API keys:
-   ```
-   ANTHROPIC_API_KEY=your_anthropic_api_key_here
-   TMDB_API_KEY=your_tmdb_api_key_here
-   ```
+**Claude instead of a recommendation algorithm**: Gets actual reasoning for each suggestion, handles nuance better than collaborative filtering
 
-4. Run the server:
-   ```bash
-   node server.js
-   ```
+**TMDB for everything film-related**: Free tier is generous, posters are high quality, data is comprehensive
 
-## API Endpoints
+## What I learned
 
-- `POST /api/recommendations` - Get film recommendations
-  - Body: `{ "likedFilms": [...], "preferences": "...", "excludedFilms": [...] }`
+- Async/await patterns and error handling
+- Building a REST API with Express
+- React state management and component patterns
+- Working with external APIs (TMDB, Claude)
+- TypeScript for type safety
+- Tailwind for rapid UI development
 
-## Frontend Setup
+## Possible improvements
 
-1. Navigate to the frontend folder:
-   ```bash
-   cd frontend
-   ```
+- User accounts with JWT auth
+- MongoDB for persistent watched films
+- Better poster matching for international films
+- Streaming availability (JustWatch API)
+- Filters by decade, country, genre
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+## Running tests
 
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-4. Open your browser to `http://localhost:5173`
-
-## Testing
-
-Run tests from the backend folder:
 ```bash
 cd backend
-node testTMDB.js      # Test TMDB API
-node testClaude.js    # Test Claude AI integration
-node testAPI.js       # Test full API flow
+node testTMDB.js      # Test TMDB integration
+node testClaude.js    # Test full recommendation flow
+node testAPI.js       # Test API endpoints
 ```
 
-## Usage
+---
 
-1. Start the backend server:
-   ```bash
-   cd backend
-   node server.js
-   ```
+Built by Abbas Zain Ul Abidin as a portfolio project for graduate software developer roles.
 
-2. Start the frontend (in a separate terminal):
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-
-3. Visit `http://localhost:5173` in your browser and start getting film recommendations!
+• [LinkedIn](https://www.linkedin.com/in/abbas-zain/)
